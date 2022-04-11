@@ -1,0 +1,520 @@
+---
+title: "Holmusk Data Challange - RWD Drug Efficacy"
+author: "Xingzhong (Jason) Jin"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+---
+
+### Data sources
+The following CSV files are provided:
+
+- **Patient_characteristics.csv**: contains the information about socio-demographics of patients, diagnosis, lab values, and other existing therapies patients are on
+
+- **Event_duration.csv**: Contains information about if the event happened to a patient or if patient was censored and the durations for each case from the start of therapy
+
+### Analysis aim
+
+The goal of the specific task is to compare the real-world efficacy of the two drugs by comparing the risk of events. 
+
+
+```{r config}
+knitr::opts_chunk$set(tidy=FALSE, warning=FALSE, message=FALSE, cache=TRUE, comment=NA, verbose=TRUE) 
+               
+knitr::opts_chunk$set(fig.width=6, fig.height=4, dev.args=list(bg="transparent"))
+               
+```
+
+
+```{r libs}
+# Common
+library(here)
+library(tidyverse)
+
+# EDA
+library(DataExplorer)
+
+# PSM
+library(MatchIt)
+library(cobalt)
+
+# Survival
+library(survival)
+library(survminer)
+```
+
+
+
+
+### EDA
+
+#### Patient characteristics
+
+```{r, echo=FALSE, warning=TRUE}
+
+
+pt_char_raw <- read_csv(here("Data", "Patient_characteristics.csv")) %>% 
+  janitor::clean_names()
+
+pt_char <- pt_char_raw %>% 
+  mutate(sex = factor(sex, levels = c(1:2), labels = c("Male", "Female"))) %>%  # need to chech sex codes!
+  mutate(treatment_variable = factor(treatment_variable, levels = c("Drug_B", "Drug_A"))) %>% 
+  mutate(across(is.character, factor, levels = c("No", "Yes")))
+
+```
+
+Quick overview of dataset:
+
+```{r}
+DataExplorer::introduce(pt_char)
+```
+
+Check for missing values:
+```{r}
+DataExplorer::plot_missing(pt_char, missing_only = TRUE)
+```
+Check for Little's missing at random test
+```{r}
+naniar::mcar_test(pt_char)
+```
+
+
+Check for duplicate patient_id (e.g. in case of hierarchical data):
+
+```{r}
+n_distinct(pt_char$patient_id)
+```
+
+Check for variable independence and potential interactions
+
+```{r}
+pt_char %>% 
+  select(-patient_id) %>% 
+  DataExplorer::plot_correlation()
+```
+
+Check for baseline imbalance between two treatment groups. 
+
+```{r}
+
+# function to compuate p-value between groups
+pvalue <- function(x, ...) {
+  # Construct vectors of data y, and groups (strata) g
+  y <- unlist(x)
+  g <- factor(rep(1:length(x), times=sapply(x, length)))
+  if (is.numeric(y)) {
+    # For numeric variables, perform a standard 2-sample t-test
+    p <- t.test(y ~ g)$p.value
+  } else {
+    # For categorical variables, perform a chi-squared test of independence
+    p <- chisq.test(table(y, g))$p.value
+  }
+  # Format the p-value, using an HTML entity for the less-than sign.
+  # The initial empty string places the output on the line below the variable label.
+  c("", format.pval(p, digits=3, eps=0.001))
+}
+
+# customize table1 output - continuous variables 
+my.render.cont <- function(x) {
+  with(table1::stats.apply.rounding(table1::stats.default(x), digits=2),
+       c("", "Mean ± SD)"=sprintf("%s ± %s", MEAN, SD)))
+}
+
+# customize table1 output - categorical variables 
+my.render.cat <- function(x) {
+  c("", sapply(table1::stats.default(x), function(y) with(y, sprintf("%s (%0.1f%%)", format(FREQ, big.mark = ","), PCT))))
+}
+
+# show table1 of patient characteristics between treatment groups
+pt_char %>% 
+  table1::table1(as.formula(~ . - patient_id | treatment_variable), data = ., 
+                 render.continuous = my.render.cont, 
+                 render.missing = NULL, 
+                 render.categorical = my.render.cat, 
+                 overall = FALSE, extra.col = list('P-value' = pvalue))
+```
+
+#### Outcome Event
+
+```{r, echo=FALSE, warning=TRUE, message=FALSE}
+
+event_time_raw <- read_csv(here("Data", "Event_duration.csv")) %>% 
+  janitor::clean_names()
+
+event_time <- event_time_raw %>% 
+  mutate(treatment_variable = factor(treatment_variable, levels = c("Drug_A", "Drug_B")))
+
+```
+
+
+Quick overview of dataset:
+
+```{r}
+DataExplorer::introduce(event_time)
+```
+
+Quick view on gross bleeding rate between two treatment groups over time:
+
+```{r}
+
+surv_fit <- 
+  event_time %>% 
+  survfit(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, data = .)
+
+plot(surv_fit, 
+     xlab = "Year", 
+     ylab = "Probability of no bleeding event", 
+     col = 2:3)
+legend("topright", levels(pt_char$treatment_variable), col = 2:3, lty = 1)
+
+```
+
+
+### Inference analysis
+
+#### Propensity score matching
+
+As there are lots of missing values in the "lab_value" variables, and missingness is not MCAR. Simple impuation is used to indicate missingness in PSM. 
+
+```{r}
+set.seed(123)
+
+# function to perform single simple imputation before PSM
+simple_impute <- function(df) {
+  
+  getmode <- function(var) {
+    uniqv <- unique(var)
+    mode <- uniqv[which.max(tabulate(match(var, uniqv)))]
+    
+    return(mode)
+  }
+  
+  # identify variable that needs to be imputed 
+  vars_to_impute <- df %>% 
+    DataExplorer::profile_missing() %>% 
+    dplyr::filter(num_missing > 0) %>% 
+    pull(feature) %>% 
+    as.character()
+  
+  
+  df <- df %>% 
+    
+    # single simple median imputation of missing continuous covariates for PSM matching
+    mutate(across(where(is.numeric) & any_of(vars_to_impute), is.na, .names = "{.col}_na")) %>% 
+    mutate(across(where(is.numeric) & any_of(vars_to_impute), ~coalesce(.x, mean(.x, na.rm = TRUE)))) %>% 
+    
+    # single simple median imputation of missing continuous covariates for PSM matching
+    mutate(across(where(is.factor) & any_of(vars_to_impute), is.na, .names = "{.col}_na")) %>% 
+    mutate(across(where(is.factor) & any_of(vars_to_impute), ~coalesce(.x, getmode(.x)))) 
+  
+  return(df)
+}
+
+
+pt_char_psm <- pt_char %>% 
+  simple_impute()
+```
+
+As we are interested in comparison of two medications, ATE is selected as the estimand for PSM. Therefore, subclassifcation and optimal full matching are used. 
+
+##### Optimal full matching
+
+```{r}
+# Full matching is very slow with large dataset on local machine
+psm_full <- pt_char_psm %>%
+  matchit(formula = treatment_variable ~ . - patient_id, data = ., exact = ~ sex,
+          estimand = "ATE", method = "full", distance = "glm",
+          verbose = TRUE)
+
+bal.tab(psm_full, un = TRUE, stats = c("m"), thresholds = 0.1)
+```
+##### Subcalssification
+
+Subclassification is the fastest PSM method, and it's similar to optimal full match with large number of subclasses.
+
+```{r}
+
+psm_sub1000 <- pt_char_psm %>% 
+  matchit(formula = treatment_variable ~ . - patient_id, data = ., 
+          estimand = "ATE", method = "subclass", distance = "glm", subclass = 1000,
+          verbose = TRUE)
+
+psm_sub500 <- pt_char_psm %>% 
+  matchit(formula = treatment_variable ~ . - patient_id, data = ., 
+          estimand = "ATE", method = "subclass", distance = "glm", subclass = 500,
+          verbose = TRUE)
+
+
+```
+
+
+
+
+#### Post matching balance check
+
+Subclassifcation with 500 subclasses is marginally better than 1000 subclasses, therefore it is chosen to proceed to the outcome mode. 
+
+```{r}
+love.plot(psm_full, stats = c("m"),  abs = FALSE,
+          weights = list(sub500 = psm_sub500, 
+                         sub1000 = psm_sub1000),
+          drop.distance = FALSE, thresholds = 0.1,
+          binary = "std",
+          shapes = c("triangle", "square", "circle", "diamond"),
+          colors = c("red", "darkgreen", "blue", "orange"),
+          sample.names = c("Original", "Full","Subclassification500", "Subclassification1000"),
+          position = "bottom")
+
+
+
+```
+
+#### Effect estimate after matching
+
+
+```{r}
+
+
+# extract p-value for survival curve plotting
+cox_pval <-  function(cox_fit) {
+  round(last(summary(cox_fit)$coefficient), digits = 3)
+}
+
+# extract HR and 95%CI for plotting
+cox_hr <- function(cox_fit) {
+  paste0(format(summary(cox_fit)$conf.int[1, 1], digits = 3, nsmall = 2), 
+         " [", format(summary(cox_fit)$conf.int[1, 3], digits = 3, nsmall = 2), ", ", 
+         format(summary(cox_fit)$conf.int[1, 4], digits = 3, nsmall = 2), "]")
+}
+
+# survival curve plot
+
+surv_plot <- function(cox_fit, surv_fit, data, ...) {
+  survplot <- survminer::ggsurvplot(surv_fit, data = data, 
+                                    fun = "event", censor = FALSE, surv.scale = "percent", 
+                                    legend.title = "Medication", legend.labs = levels(event_time$treatment_variable), 
+                                    xlab = "Year",
+                                    ylab = "Cummulative bleeding events (%)", 
+                                    ...)
+  
+  survplot <- survplot$plot + 
+    annotate(geom = "text", x = 1, y = 0.1, label = paste0("HR = ", cox_hr(cox_fit))) +
+    annotate(geom = "text", x = 1, y = 0.05, label = paste0("P = ", cox_pval(cox_fit))) +
+    scale_y_continuous(labels = ~paste0(.x * 100, "%")) +
+    theme(legend.position = c(0.9, 0.2), 
+          legend.background = element_rect(size = 0.5, linetype = "solid", color = "black"))
+  
+  return(survplot)
+}
+
+
+```
+
+
+##### Cox regression with raw data
+
+```{r}
+cox_raw <- coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, data = event_time)
+
+surv_raw <- survfit(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, data = event_time)
+
+plot_raw <- surv_plot(cox_raw, surv_raw, event_time, conf.int = TRUE)
+
+plot_raw
+```
+
+Looks like drugA is statistically lower in bleeding events than drugB, particularly in the 1st year after use. 
+
+```{r}
+
+ggcoxzph(cox.zph(cox_raw))
+```
+Proportional hazard assumption test passed.
+
+##### Optimal full mathching
+```{r}
+dat_full <- match.data(psm_full) %>% 
+  left_join(event_time, by = c("patient_id", "treatment_variable")) 
+  
+
+  
+cox_full <- survival::coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, 
+                              data = dat_full, weights = weights, cluster = subclass, robust = TRUE)
+  
+surv_full <- survival::survfit(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, 
+                              data = dat_full, weights = weights, cluster = subclass, robust = TRUE)
+  
+
+plot_full <- surv_plot(cox_full, surv_full, dat_full, conf.int = TRUE)
+
+plot_full
+
+```
+The difference between DrugA and DrugB is not significant after full matching. 
+
+##### Subclassification
+
+###### 500 subclass
+
+```{r}
+dat_sub500 <- match.data(psm_sub500) %>% 
+  left_join(event_time, by = c("patient_id", "treatment_variable")) 
+  
+  
+cox_sub500 <- survival::coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, 
+                              data = dat_sub500, weights = weights, cluster = subclass, robust = TRUE)
+  
+surv_sub500 <- survival::survfit(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, 
+                              data = dat_sub500, weights = weights, cluster = subclass, robust = TRUE)
+  
+
+plot_sub500 <- surv_plot(cox_sub500, surv_sub500, dat_sub500, conf.int = TRUE)
+
+
+
+```
+
+ 
+
+###### 1000 subclass
+
+```{r}
+dat_sub1000 <- match.data(psm_sub1000) %>% 
+  left_join(event_time, by = c("patient_id", "treatment_variable")) 
+  
+  
+cox_sub1000 <- survival::coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, 
+                              data = dat_sub1000, weights = weights, cluster = subclass, robust = TRUE)
+  
+surv_sub1000 <- survival::survfit(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable, 
+                              data = dat_sub1000, weights = weights, cluster = subclass, robust = TRUE)
+  
+
+surv_plot(cox_sub1000, surv_sub1000, dat_sub1000, conf.int = TRUE)
+
+```
+
+
+The difference between DrugA and DrugB is not significant after subclassification.
+
+#### Sensitivity analysis
+
+##### Conventional multivariable cox regression
+
+```{r}
+dat_merge <- pt_char_psm%>% 
+  left_join(event_time, by = c("patient_id", "treatment_variable")) 
+
+cox_cond <- dat_merge %>% 
+  coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ . -patient_id, data = .)
+
+summary(cox_cond)
+
+```
+
+##### Forest plot for sensitivity analysis
+
+```{r}
+# collect results 
+
+res_sum <- summary(cox_raw)$conf.int[1, c(1, 3, 4)] %>% 
+  bind_rows(summary(cox_full)$conf.int[1, c(1, 3, 4)]) %>% 
+  bind_rows(summary(cox_sub500)$conf.int[1, c(1, 3, 4)]) %>% 
+  bind_rows(summary(cox_cond)$conf.int[1, c(1, 3, 4)]) %>% 
+  rename(hr = "exp(coef)", 
+         ll = "lower .95", 
+         ul = "upper .95") %>% 
+  mutate(index = 1:4,
+         model = c("Unweighted", "Full matching", "Subclassification", "Multivariable"))  
+
+forest_plot <-
+  res_sum %>% 
+  ggplot(aes(y = index, x = hr, xmin = ll, xmax = ul)) + 
+  geom_point(aes(shape = "solid circle"), size = 2) +
+  # scale_shape_manual(values = c(4, 18, 20, 17)) +
+  geom_errorbar(width = .2) +
+  geom_vline(xintercept = 1, linetype = 2, alpha = .5) +
+  scale_y_continuous(name = NULL, 
+                     breaks = res_sum$index, 
+                     labels = res_sum$model, 
+                     trans="reverse") +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
+    xlab("Hazard Ratio (95% Confidence Interval)") +
+    theme(legend.position = "none")
+
+
+forest_plot
+
+```
+
+
+#### Subgroup analysis
+
+```{r}
+dat_full_subgroup <- dat_full %>%   
+  mutate(age_group = cut(age, breaks = c(0, 60, 200), right = FALSE, labels = c("Adult", "Elderly"))) 
+
+# Test for subgroup balance just in case they are not
+dat_full_subgroup %>%   
+  bal.tab(treatment_variable ~ sex + age_group + sex*age_group, data = .)
+
+```
+
+##### Sex
+
+```{r}
+# Full matching
+cox_full_sex <- coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable * sex, 
+                              data = dat_full_subgroup, weights = weights, cluster = subclass, robust = TRUE)
+
+summary(cox_full_sex)
+
+```
+
+No interaction between treatment and sex. 
+
+##### Age group (life stage)
+
+```{r}
+
+# Full matching
+cox_full_age <- coxph(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~ treatment_variable * age_group, 
+                      data = dat_full_subgroup,
+                      weights = weights, cluster = subclass, robust = TRUE)
+
+summary(cox_full_age)
+
+
+
+```
+No interaction between treatment and age group. 
+
+
+##### Plot subgroup analysis
+
+```{r}
+
+plot_subgroup <-
+  ggsurvplot_facet(cox_full, data = dat_full_subgroup, facet.by = c("age_group", "sex"), 
+                 fun = "event", censor = FALSE, surv.scale = "percent", conf.int = TRUE, 
+                 legend.title = "Medication", legend.labs = levels(event_time$treatment_variable), 
+                 xlab = "Year",
+                 ylab = "Cummulative bleeding events (%)",
+                 short.panel.labs = TRUE
+)
+
+plot_subgroup
+
+```
+
+
+#### Save analysis results
+```{r}
+save.image(here("Data", "results.RData"))
+
+Sys.info()
+
+```
+
+
