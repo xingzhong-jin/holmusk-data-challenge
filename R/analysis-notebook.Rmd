@@ -2,9 +2,13 @@
 title: "Holmusk Data Challange - RWD Drug Efficacy"
 author: "Xingzhong (Jason) Jin"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output:
+output: 
   html_document:
-    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 6
+    code_folding: hide
+    
 ---
 
 ### Data sources
@@ -19,7 +23,7 @@ The following CSV files are provided:
 The goal of the specific task is to compare the real-world efficacy of the two drugs by comparing the risk of events. 
 
 
-```{r config}
+```{r config, echo=FALSE}
 knitr::opts_chunk$set(tidy=FALSE, warning=FALSE, message=FALSE, cache=TRUE, comment=NA, verbose=TRUE) 
                
 knitr::opts_chunk$set(fig.width=6, fig.height=4, dev.args=list(bg="transparent"))
@@ -60,7 +64,7 @@ pt_char_raw <- read_csv(here("Data", "Patient_characteristics.csv")) %>%
 pt_char <- pt_char_raw %>% 
   mutate(sex = factor(sex, levels = c(1:2), labels = c("Male", "Female"))) %>%  # need to chech sex codes!
   mutate(treatment_variable = factor(treatment_variable, levels = c("Drug_B", "Drug_A"))) %>% 
-  mutate(across(is.character, factor, levels = c("No", "Yes")))
+  mutate(across(where(is.character), factor, levels = c("No", "Yes")))
 
 ```
 
@@ -68,13 +72,20 @@ Quick overview of dataset:
 
 ```{r}
 DataExplorer::introduce(pt_char)
+
+# Create a EDA report
+# DataExplorer::create_report(pt_char, 
+#                             output_file = here("Report", "EDA_Patient_Characteristics.html"),
+#                             report_title = "Patient Characteristics Data")
 ```
 
 Check for missing values:
 ```{r}
 DataExplorer::plot_missing(pt_char, missing_only = TRUE)
 ```
-Check for Little's missing at random test
+
+Check for Little's MCAR test
+
 ```{r}
 naniar::mcar_test(pt_char)
 ```
@@ -97,42 +108,12 @@ pt_char %>%
 Check for baseline imbalance between two treatment groups. 
 
 ```{r}
-
-# function to compuate p-value between groups
-pvalue <- function(x, ...) {
-  # Construct vectors of data y, and groups (strata) g
-  y <- unlist(x)
-  g <- factor(rep(1:length(x), times=sapply(x, length)))
-  if (is.numeric(y)) {
-    # For numeric variables, perform a standard 2-sample t-test
-    p <- t.test(y ~ g)$p.value
-  } else {
-    # For categorical variables, perform a chi-squared test of independence
-    p <- chisq.test(table(y, g))$p.value
-  }
-  # Format the p-value, using an HTML entity for the less-than sign.
-  # The initial empty string places the output on the line below the variable label.
-  c("", format.pval(p, digits=3, eps=0.001))
-}
-
-# customize table1 output - continuous variables 
-my.render.cont <- function(x) {
-  with(table1::stats.apply.rounding(table1::stats.default(x), digits=2),
-       c("", "Mean ± SD)"=sprintf("%s ± %s", MEAN, SD)))
-}
-
-# customize table1 output - categorical variables 
-my.render.cat <- function(x) {
-  c("", sapply(table1::stats.default(x), function(y) with(y, sprintf("%s (%0.1f%%)", format(FREQ, big.mark = ","), PCT))))
-}
-
-# show table1 of patient characteristics between treatment groups
-pt_char %>% 
-  table1::table1(as.formula(~ . - patient_id | treatment_variable), data = ., 
-                 render.continuous = my.render.cont, 
-                 render.missing = NULL, 
-                 render.categorical = my.render.cat, 
-                 overall = FALSE, extra.col = list('P-value' = pvalue))
+tableone::CreateTableOne(data = pt_char, strata = "treatment_variable", 
+                         vars = names(pt_char)[-c(1:2)]) %>% 
+  tableone::kableone() %>%
+  kableExtra::remove_column(5) %>% 
+  kableExtra::kable_classic(lightable_options = "hover") %>% 
+  kableExtra::scroll_box(height = "450px") 
 ```
 
 #### Outcome Event
@@ -144,6 +125,11 @@ event_time_raw <- read_csv(here("Data", "Event_duration.csv")) %>%
 
 event_time <- event_time_raw %>% 
   mutate(treatment_variable = factor(treatment_variable, levels = c("Drug_A", "Drug_B")))
+
+# Create a EDA report
+# DataExplorer::create_report(event_time, 
+#                             output_file = here("Report", "EDA_Event_Duration.html"),
+#                             report_title = "Event Duration Data")
 
 ```
 
@@ -245,6 +231,7 @@ psm_sub500 <- pt_char_psm %>%
           estimand = "ATE", method = "subclass", distance = "glm", subclass = 500,
           verbose = TRUE)
 
+summary(psm_sub500)
 
 ```
 
@@ -270,23 +257,42 @@ love.plot(psm_full, stats = c("m"),  abs = FALSE,
 
 ```
 
-#### Effect estimate after matching
+#### Effect estimation after matching
 
 
 ```{r}
-
-
-# extract p-value for survival curve plotting
-cox_pval <-  function(cox_fit) {
-  round(last(summary(cox_fit)$coefficient), digits = 3)
+# annotation to survival curve
+surv_annotate <- function(surv_plot, cox_fit, ...) {
+  
+  # extract p-value for survival curve plotting
+  cox_pval <-  function(cox_fit) {
+    format(round(summary(cox_fit)$coefficient[1, 5], digits = 3), nsmall = 3)
+  }
+  
+  # extract HR and 95%CI for plotting
+  cox_hr <- function(cox_fit) {
+    paste0(format(round(summary(cox_fit)$conf.int[1, 1], digits = 2), nsmall = 2), 
+           " [", format(round(summary(cox_fit)$conf.int[1, 3], digits = 2), nsmall = 2), ", ", 
+           format(round(summary(cox_fit)$conf.int[1, 4], digits = 2), nsmall = 2), "]")
+  }
+  
+  # annotate on the plot  
+  annotation_text <- data.frame(
+    x = c(1, 1),
+    y = c(0.1, 0.05),
+    label = c(paste0("HR = ", cox_hr(cox_fit)),
+              paste0("P = ", cox_pval(cox_fit)))
+  )
+  
+  surv_plot$plot <- surv_plot$plot +
+    geom_text(data = annotation_text, 
+              aes(x = x, y = y, label = label),
+              ...)
+  
+  return(surv_plot)
 }
 
-# extract HR and 95%CI for plotting
-cox_hr <- function(cox_fit) {
-  paste0(format(summary(cox_fit)$conf.int[1, 1], digits = 3, nsmall = 2), 
-         " [", format(summary(cox_fit)$conf.int[1, 3], digits = 3, nsmall = 2), ", ", 
-         format(summary(cox_fit)$conf.int[1, 4], digits = 3, nsmall = 2), "]")
-}
+
 
 # survival curve plot
 
@@ -294,13 +300,11 @@ surv_plot <- function(cox_fit, surv_fit, data, ...) {
   survplot <- survminer::ggsurvplot(surv_fit, data = data, 
                                     fun = "event", censor = FALSE, surv.scale = "percent", 
                                     legend.title = "Medication", legend.labs = levels(event_time$treatment_variable), 
-                                    xlab = "Year",
+                                    xlab = "Month", xscale = "y_m",
                                     ylab = "Cummulative bleeding events (%)", 
                                     ...)
   
-  survplot <- survplot$plot + 
-    annotate(geom = "text", x = 1, y = 0.1, label = paste0("HR = ", cox_hr(cox_fit))) +
-    annotate(geom = "text", x = 1, y = 0.05, label = paste0("P = ", cox_pval(cox_fit))) +
+  survplot$plot <- survplot$plot + 
     scale_y_continuous(labels = ~paste0(.x * 100, "%")) +
     theme(legend.position = c(0.9, 0.2), 
           legend.background = element_rect(size = 0.5, linetype = "solid", color = "black"))
@@ -321,7 +325,7 @@ surv_raw <- survfit(Surv(duration_in_years, bleeding_event_1_event_0_censored) ~
 
 plot_raw <- surv_plot(cox_raw, surv_raw, event_time, conf.int = TRUE)
 
-plot_raw
+surv_annotate(plot_raw, cox_raw)
 ```
 
 Looks like drugA is statistically lower in bleeding events than drugB, particularly in the 1st year after use. 
@@ -330,6 +334,8 @@ Looks like drugA is statistically lower in bleeding events than drugB, particula
 
 ggcoxzph(cox.zph(cox_raw))
 ```
+
+
 Proportional hazard assumption test passed.
 
 ##### Optimal full mathching
@@ -346,11 +352,13 @@ surv_full <- survival::survfit(Surv(duration_in_years, bleeding_event_1_event_0_
                               data = dat_full, weights = weights, cluster = subclass, robust = TRUE)
   
 
-plot_full <- surv_plot(cox_full, surv_full, dat_full, conf.int = TRUE)
+plot_full <- surv_plot(cox_full, surv_full, dat_full, conf.int = TRUE) 
 
-plot_full
+surv_annotate(plot_full, cox_full)
+  
 
 ```
+
 The difference between DrugA and DrugB is not significant after full matching. 
 
 ##### Subclassification
@@ -371,7 +379,7 @@ surv_sub500 <- survival::survfit(Surv(duration_in_years, bleeding_event_1_event_
 
 plot_sub500 <- surv_plot(cox_sub500, surv_sub500, dat_sub500, conf.int = TRUE)
 
-
+surv_annotate(plot_sub500, cox_sub500)
 
 ```
 
@@ -391,7 +399,9 @@ surv_sub1000 <- survival::survfit(Surv(duration_in_years, bleeding_event_1_event
                               data = dat_sub1000, weights = weights, cluster = subclass, robust = TRUE)
   
 
-surv_plot(cox_sub1000, surv_sub1000, dat_sub1000, conf.int = TRUE)
+plot_sub1000 <- surv_plot(cox_sub1000, surv_sub1000, dat_sub1000, conf.int = TRUE)
+
+surv_annotate(plot_sub1000, cox_sub1000)
 
 ```
 
@@ -513,7 +523,7 @@ plot_subgroup
 ```{r}
 save.image(here("Data", "results.RData"))
 
-Sys.info()
+print(Sys.info())
 
 ```
 
