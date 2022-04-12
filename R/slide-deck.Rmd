@@ -1,0 +1,353 @@
+---
+title: "Head-to-head comparison of bleeding risk between two antipsychotic medications"
+
+subtitle: "A 2-year survival analysis of data from electronic health records"
+author: "Xingzhong (Jason) Jin"
+date: "Updated: `r Sys.Date()`"
+output:
+  xaringan::moon_reader:
+    css: ["default", "libs/custom-css/metropolis-holmusk.css", "metropolis-fonts"]
+    lib_dir: libs
+    nature:
+      ratio: 16:9
+      slideNumberFormat: "%current%"
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+    includes:
+      after_body: insert-holmusk-logo.html
+
+
+---
+
+```{r setup, include=FALSE}
+
+#### Library ####
+# Common
+library(here)
+library(tidyverse)
+
+# EDA
+library(DataExplorer)
+
+# PSM
+library(MatchIt)
+library(cobalt)
+
+# Survival
+library(survival)
+library(survminer)
+
+# Report
+library(kableExtra)
+
+#### Report Setting ####
+knitr::opts_chunk$set(tidy=FALSE, warning=FALSE, message=FALSE, echo=FALSE, comment=NA, verbose=TRUE) 
+               
+knitr::opts_chunk$set(fig.width=6, fig.height=4, dev.args=list(bg="transparent"))
+
+theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
+             plot.background = element_rect(fill = "transparent", colour = NA))
+
+#### RData ####
+load(here("Data", "results.RData"))
+
+```
+
+
+# Introduction
+
+## Background .font50[(to create context around the data challenge)]
+
+- Use of anti-psychotic medications is associated with hematological side effects, such as bleeding. 
+- [Drug A] and [Drug B] are the two common antipsychotic medications on the market. 
+- [Drug A] has been marketed to have a lower risk of bleeding events.  
+
+## Aim
+
+- To investigate the real-world evidence of [Drug A] having lower bleeding risk compared to [Drug B]. 
+
+
+---
+
+# Exploratory Data Analysis
+
+## Datasets
+
+- Time-to-event data of bleeding adverse events over `r max(event_time$duration_in_years)` years from electronic health records of `r formatC(nrow(pt_char), big.mark = ",")` patients. 
+
+- **Patient_characteristics.csv** contains the information about socio-demographics of patients (e.g. age and sex), diagnosis (17), disease severity scores (2), lab values (8), and concomitant medications. 
+
+```{r}
+introduce(pt_char) %>% 
+  select(rows, columns, complete_rows, total_missing_values, memory_usage) %>% 
+  kbl() %>% 
+  column_spec(4, background = "yellow", 
+              popover = "Large number of missing values")
+```
+
+- **Event_duration.csv** contains information about if the event happened to a patient or if a patient was censored and the durations for each case from the start of therapy. 
+
+
+```{r}
+
+introduce(event_time) %>% 
+  select(rows, columns, complete_rows, total_missing_values, memory_usage) %>% 
+  kable()
+
+
+```
+
+---
+
+# Missing Value Pattern
+
+
+```{r, fig.width=11, fig.height=6}
+plot_missing(pt_char, missing_only = TRUE,
+             ggtheme = theme_classic(), 
+             theme_config = list(legend.position = "none",
+                                 axis.text = element_text(size = 16),
+                                 axis.title = element_text(size = 20)))
+
+
+```
+
+- Little's test on MCAR (Missing Completely At Random) is statistically significant (p < 0.01).
+
+---
+
+# Patient Characteristics 
+
+- Significant difference (i.e., potential confounding effects) between two treatment groups
+
+```{r}
+
+tableone::CreateTableOne(data = pt_char, strata = "treatment_variable", 
+                         vars = names(pt_char)[-c(1:2)]) %>% 
+  tableone::kableone() %>%
+  remove_column(5) %>% 
+  kable_classic(lightable_options = "hover") %>% 
+  scroll_box(height = "450px") 
+```
+
+
+---
+
+# Statistical Inference - Propensity Score Matching
+
+- Propensity score matching (PSM)
+
+  - Match all patient characteristic variables
+  - Missing values handled by simple imputation
+
+      - Mean imputation for continuous data; mode imputation for categorical data
+      - New variables created to indicate missingness for individual variable
+
+  - Standard mean difference (SMD) as the distance measure
+  
+  - Target of estimand is Average Treatment Effect (ATE)
+
+  - Two PSM methods tested
+
+      - Subclassification (number of subclass = 500)
+      - Optimal full match (1:k, exact match on sex)
+
+
+---
+
+# Statistical Inference - Survival Analysis
+
+- Cox regression
+
+  - Marginal model with inverse propensity score weighting from PSM 
+  - Robust variance estimator used to estimate account for the clustering within PS matched data
+  - Weighted Hazard Ratio (HR) and 95% confidence interval reported
+  - Hypothesis testing using weighted log-rank test
+
+- Sensitivity analyses
+
+  - PSM samples *vs* unmatched sample
+  - PSM marginal models *vs* conventional multivariable cox regression model
+
+- Subgroup analyses
+
+  - Male *vs* Female
+  - Adult (<60 years) *vs* Elderly (≥60 years)
+
+---
+
+# Results - Unweighted Survival Analysis
+
+```{r fig.width=14, fig.height=7}
+plot_unweight <- ggsurvplot(surv_raw, data = event_time, 
+                            fun = "event", censor = FALSE, surv.scale = "percent", conf.int = TRUE, xscale = "y_m",
+                            legend.title = "Medication", legend.labs = levels(event_time$treatment_variable), 
+                            xlab = "Month",
+                            ylab = "Cummulative bleeding events (%)", 
+                            risk.table = TRUE, risk.table.height = 0.20,
+                            cumevents = TRUE, cumevents.height = 0.20
+                            )
+
+plot_unweight$plot <-  plot_unweight$plot +
+    scale_y_continuous(labels = ~paste0(.x * 100, "%")) +
+    theme(legend.position = c(0.9, 0.2), 
+          legend.background = element_rect(size = 0.5, linetype = "solid", color = "black"), 
+          legend.text = element_text(size = 16), 
+          legend.title = element_text(size = 16))
+
+surv_annotate(plot_unweight, cox_raw, size = 7)
+
+```
+
+
+
+---
+
+# Results - PSM Performance
+
+- Both full matching and subclassification achieved good balance in patient characteristics between the two treatment groups (< 0.1 SMD).
+
+```{r fig.show="hold", out.width="50%"}
+
+
+lplot1 <-
+  love.plot(f.build("treatment_variable", pt_char_psm %>% select(age, sex, starts_with("diag"))), data = pt_char_psm,
+            weights = list(
+              full = psm_full,
+              sub500 = psm_sub500),
+            stats = c("m"),  abs = TRUE, s.d.denom = "pooled", limits = list(m = c(0, 0.8)), 
+            drop.distance = TRUE, thresholds = 0.1,
+            binary = "std", alpha = 0.7, line = TRUE,
+            shapes = c("triangle", "circle", "diamond"),
+            colors = c("red", "blue", "orange"),
+            sample.names = c("Unweighted", "Full-match","Subclass"),
+            position = c(0.9, 0.8), 
+            title = element_blank()) +
+  xlab("Absolute SMD") +
+  theme(
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12), 
+    axis.text.x = element_text(size = 16),
+    axis.title.x = element_text(size = 16),
+    )
+
+lplot2 <- 
+  love.plot(f.build("treatment_variable", pt_char_psm %>% select(starts_with("other"), starts_with("lab"), - ends_with("na"))), data = pt_char_psm,
+            weights = list(
+              full = psm_full,
+              sub500 = psm_sub500),
+            stats = c("m"),  abs = TRUE, s.d.denom = "pooled", limits = list(m = c(0, 0.8)), 
+            drop.distance = TRUE, thresholds = 0.1,
+            binary = "std", alpha = 0.7, line = TRUE,
+            shapes = c("triangle", "circle", "diamond"),
+            colors = c("red", "blue", "orange"),
+            sample.names = c("Unweighted", "Full-match","Subclass"),
+            position = c(0.9, 0.8), 
+            title = element_blank()) +
+  xlab("Absolute SMD") +
+  theme(
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12), 
+    axis.text.x = element_text(size = 16),
+    axis.title.x = element_text(size = 16),
+  )
+
+
+par(mar = c(4, 4, .1, .1))
+plot(lplot1)
+plot(lplot2)
+
+
+
+```
+
+
+---
+
+# Results - Survival Analysis (Full Matching) 
+
+```{r fig.width=14, fig.height=7}
+plot_full$plot <- plot_full$plot +
+  theme(
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 20), 
+    strip.text = element_text(size = 20),
+    axis.text = element_text(size = 18),
+    axis.title = element_text(size = 18),
+    )
+
+surv_annotate(plot_full, cox_full, size = 7)
+```
+
+---
+
+# Results - Survival Analysis (Subclassifcation) 
+
+```{r fig.width=14, fig.height=7}
+plot_sub500$plot <- plot_sub500$plot +
+  theme(
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 20), 
+    strip.text = element_text(size = 20),
+    axis.text = element_text(size = 18),
+    axis.title = element_text(size = 18),
+    )
+
+surv_annotate(plot_sub500, cox_sub500, size = 7)
+```
+
+
+---
+
+# Results - Sensitivity Analysis (Multivariable Regression) 
+
+.font120[**Summary of sensitivity analysis:**]
+
+```{r fig.width=14, fig.height=6}
+forest_plot +
+  theme(axis.text = element_text(size = 20), 
+        axis.title = element_text(size = 24))
+```
+
+
+---
+
+# Results - Subgrvival Analysis (Full Matching)
+
+```{r fig.width=14, fig.height=6}
+plot_subgroup +
+  theme(
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 20), 
+    strip.text = element_text(size = 20),
+    axis.text.x = element_text(size = 16),
+    axis.text.y = element_text(size = 16),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16), 
+    )
+```
+
+- There are no interaction between treatment and sex or age group (adult vs elderly).
+
+
+---
+
+# Conclusion 
+.font150[
+- There is no significant difference in bleeding events between Drug A and Drug B over the 2 years.
+- The difference between the two medications in bleeding events are similar between male and females.
+- The risk of bleeding events of the two drugs is similar among adults and elderly.
+]
+
+
+---
+
+# Extra Statistical Notes 
+.font120[
+- Constructing a direct acyclic graph (DAG) is preferred before conducting PSM, however, this requires more context information which is beyond the purpose of this data challenge. 
+- The analyses in this study presume all the causal inference assumptions are met (e.g., exchangibility, consistency, positivity, etc) for the same reason above. 
+- Inverse Probability Treatment Weighting (IPTW) for ATE can be an alternative solution for controlling confounding. However, empirical evidence has shown that results from IPTW are very close to full matching. 
+- Doubly robust estimation (e.g., combining propensity score model and multivariable outcome model) could produce more robust results. However, given both propensity score model and multivariable outcome model showed no significant difference. It is expected the results are same in doubly robust estimation.
+- Missing data can also be managed by multiple imputations, but it is expected to increase noise in this case. 
+]

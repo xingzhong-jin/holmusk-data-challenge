@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Head-to-head comparison of bleeding risk between two antipsychotic medications</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Xingzhong (Jason) Jin" />
+    <script src="libs/header-attrs-2.13/header-attrs.js"></script>
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/metropolis-fonts.css" rel="stylesheet" />
+    <script src="libs/kePrint-0.0.1/kePrint.js"></script>
+    <link href="libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
+    <link rel="stylesheet" href="libs/custom-css/metropolis-holmusk.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Head-to-head comparison of bleeding risk between two antipsychotic medications
+## A 2-year survival analysis of data from electronic health records
+### Xingzhong (Jason) Jin
+### Updated: 2022-04-12
+
+---
+
+
+
+
+
+# Introduction
+
+## Background .font50[(to create context around the data challenge)]
+
+- Use of anti-psychotic medications is associated with hematological side effects, such as bleeding. 
+- [Drug A] and [Drug B] are the two common antipsychotic medications on the market. 
+- [Drug A] has been marketed to have a lower risk of bleeding events.  
+
+## Aim
+
+- To investigate the real-world evidence of [Drug A] having lower bleeding risk compared to [Drug B]. 
+
+
+---
+
+# Exploratory Data Analysis
+
+## Datasets
+
+- Time-to-event data of bleeding adverse events over 2 years from electronic health records of 19,284 patients. 
+
+- **Patient_characteristics.csv** contains the information about socio-demographics of patients (e.g. age and sex), diagnosis (17), disease severity scores (2), lab values (8), and concomitant medications. 
+
+&lt;table&gt;
+ &lt;thead&gt;
+  &lt;tr&gt;
+   &lt;th style="text-align:right;"&gt; rows &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; columns &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; complete_rows &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; total_missing_values &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; memory_usage &lt;/th&gt;
+  &lt;/tr&gt;
+ &lt;/thead&gt;
+&lt;tbody&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 19284 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 37 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 2 &lt;/td&gt;
+   &lt;td style="text-align:right;background-color: yellow !important;" data-toggle="popover" data-container="body" data-trigger="hover" data-placement="right" data-content="Large number of missing values"&gt; 66347 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 3800704 &lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+- **Event_duration.csv** contains information about if the event happened to a patient or if a patient was censored and the durations for each case from the start of therapy. 
+
+
+&lt;table&gt;
+ &lt;thead&gt;
+  &lt;tr&gt;
+   &lt;th style="text-align:right;"&gt; rows &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; columns &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; complete_rows &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; total_missing_values &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; memory_usage &lt;/th&gt;
+  &lt;/tr&gt;
+ &lt;/thead&gt;
+&lt;tbody&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 19284 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 4 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 19284 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 0 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 542360 &lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+---
+
+# Missing Value Pattern
+
+
+![](slide-deck_files/figure-html/unnamed-chunk-3-1.png)&lt;!-- --&gt;
+
+- Little's test on MCAR (Missing Completely At Random) is statistically significant (p &lt; 0.01).
+
+---
+
+# Patient Characteristics 
+
+- Significant difference (i.e., potential confounding effects) between two treatment groups
+
+&lt;div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:450px; "&gt;&lt;table class=" lightable-classic lightable-hover" style='font-family: "Arial Narrow", "Source Sans Pro", sans-serif; margin-left: auto; margin-right: auto;'&gt;
+ &lt;thead&gt;
+  &lt;tr&gt;
+   &lt;th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;"&gt;   &lt;/th&gt;
+   &lt;th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;"&gt; Drug_B &lt;/th&gt;
+   &lt;th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;"&gt; Drug_A &lt;/th&gt;
+   &lt;th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;"&gt; p &lt;/th&gt;
+   
+  &lt;/tr&gt;
+ &lt;/thead&gt;
+&lt;tbody&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; n &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 10766 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 8518 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt;  &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; sex = Female (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 4420 (41.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3478 (40.8) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.765 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; age (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 77.04 (11.02) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 77.10 (10.90) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.689 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_1 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2889 (26.8) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1828 (21.5) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_2 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1742 (16.2) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1104 (13.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_3 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 5974 (55.5) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 4110 (48.3) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_4 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2041 (19.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1536 (18.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.105 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_5 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 289 ( 2.7) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 202 ( 2.4) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.186 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_6 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1462 (13.6) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1203 (14.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.287 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_7 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3630 (33.7) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3076 (36.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; other_drugs_8 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3336 (31.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1536 (18.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_1 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 5714 (53.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 4710 (55.3) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.002 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_2 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2385 (22.2) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1693 (19.9) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_3 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 824 ( 7.7) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 540 ( 6.3) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_4 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 113 ( 1.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 44 ( 0.5) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_5 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 531 ( 4.9) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 849 (10.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_6 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1223 (11.4) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 503 ( 5.9) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_7 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1197 (11.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1158 (13.6) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_8 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 5446 (50.6) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3779 (44.4) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_9 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3851 (35.8) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3257 (38.2) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_10 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2216 (20.6) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1625 (19.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.010 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_11 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 409 ( 3.8) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 403 ( 4.7) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.002 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_12 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 328 ( 3.0) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 206 ( 2.4) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.009 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_13 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2216 (20.6) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2094 (24.6) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_14 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 849 ( 7.9) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 591 ( 6.9) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.014 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diagnosis_15 = Yes (%) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 121 ( 1.1) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 117 ( 1.4) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.135 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_1 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1.22 (1.18) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.92 (0.36) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_2 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 371.34 (134.79) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 347.41 (120.06) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_3 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 125.75 (46.66) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 128.59 (46.11) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.303 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_4 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 5.83 (0.98) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 6.20 (1.14) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_5 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 6.15 (1.11) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 6.11 (0.97) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.095 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_6 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 19.55 (8.51) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 22.21 (19.49) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_7 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1.60 (0.77) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 1.16 (0.28) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; &amp;lt;0.001 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; lab_8 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 109.39 (71.72) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 111.36 (73.32) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.115 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diag_score_1 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2.54 (1.54) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 2.58 (1.49) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.053 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; diag_score_2 (mean (SD)) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3.49 (1.71) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 3.52 (1.64) &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 0.216 &lt;/td&gt;
+   
+  &lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;&lt;/div&gt;
+
+
+---
+
+# Statistical Inference - Propensity Score Matching
+
+- Propensity score matching (PSM)
+
+  - Match all patient characteristic variables
+  - Missing values handled by simple imputation
+
+      - Mean imputation for continuous data; mode imputation for categorical data
+      - New variables created to indicate missingness for individual variable
+
+  - Standard mean difference (SMD) as the distance measure
+  
+  - Target of estimand is Average Treatment Effect (ATE)
+
+  - Two PSM methods tested
+
+      - Subclassification (number of subclass = 500)
+      - Optimal full match (1:k, exact match on sex)
+
+
+---
+
+# Statistical Inference - Survival Analysis
+
+- Cox regression
+
+  - Marginal model with inverse propensity score weighting from PSM 
+  - Robust variance estimator used to estimate account for the clustering within PS matched data
+  - Weighted Hazard Ratio (HR) and 95% confidence interval reported
+  - Hypothesis testing using weighted log-rank test
+
+- Sensitivity analyses
+
+  - PSM samples *vs* unmatched sample
+  - PSM marginal models *vs* conventional multivariable cox regression model
+
+- Subgroup analyses
+
+  - Male *vs* Female
+  - Adult (&lt;60 years) *vs* Elderly (≥60 years)
+
+---
+
+# Results - Unweighted Survival Analysis
+
+![](slide-deck_files/figure-html/unnamed-chunk-5-1.png)&lt;!-- --&gt;
+
+
+
+---
+
+# Results - PSM Performance
+
+- Both full matching and subclassification achieved good balance in patient characteristics between the two treatment groups (&lt; 0.1 SMD).
+
+&lt;img src="slide-deck_files/figure-html/unnamed-chunk-6-1.png" width="50%" /&gt;&lt;img src="slide-deck_files/figure-html/unnamed-chunk-6-2.png" width="50%" /&gt;
+
+
+---
+
+# Results - Survival Analysis (Full Matching) 
+
+![](slide-deck_files/figure-html/unnamed-chunk-7-1.png)&lt;!-- --&gt;
+
+---
+
+# Results - Survival Analysis (Subclassifcation) 
+
+![](slide-deck_files/figure-html/unnamed-chunk-8-1.png)&lt;!-- --&gt;
+
+
+---
+
+# Results - Sensitivity Analysis (Multivariable Regression) 
+
+.font120[**Summary of sensitivity analysis:**]
+
+![](slide-deck_files/figure-html/unnamed-chunk-9-1.png)&lt;!-- --&gt;
+
+
+---
+
+# Results - Subgrvival Analysis (Full Matching)
+
+![](slide-deck_files/figure-html/unnamed-chunk-10-1.png)&lt;!-- --&gt;
+
+- There are no interaction between treatment and sex or age group (adult vs elderly).
+
+
+---
+
+# Conclusion 
+.font150[
+- There is no significant difference in bleeding events between Drug A and Drug B over the 2 years.
+- The difference between the two medications in bleeding events are similar between male and females.
+- The risk of bleeding events of the two drugs is similar among adults and elderly.
+]
+
+
+---
+
+# Extra Statistical Notes 
+.font120[
+- Constructing a direct acyclic graph (DAG) is preferred before conducting PSM, however, this requires more context information which is beyond the purpose of this data challenge. 
+- The analyses in this study presume all the causal inference assumptions are met (e.g., exchangibility, consistency, positivity, etc) for the same reason above. 
+- Inverse Probability Treatment Weighting (IPTW) for ATE can be an alternative solution for controlling confounding. However, empirical evidence has shown that results from IPTW are very close to full matching. 
+- Doubly robust estimation (e.g., combining propensity score model and multivariable outcome model) could produce more robust results. However, given both propensity score model and multivariable outcome model showed no significant difference. It is expected the results are same in doubly robust estimation.
+- Missing data can also be managed by multiple imputations, but it is expected to increase noise in this case. 
+]
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"ratio": "16:9",
+"slideNumberFormat": "%current%",
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+<style>
+.logo {
+  background-image: url(https://assets.website-files.com/6078f42d748b85659b713f70/607950e3293570d1a0a53b03_Navbar%3ALogo.svg);
+  background-size: contain;
+  background-repeat: no-repeat;
+  position: absolute;
+  top: 32em;
+  right: 1em;
+  width: 110px;
+  height: 128px;
+  z-index: 0;
+}
+</style>
+
+<script>
+document
+  .querySelectorAll(
+    '.remark-slide-content' +
+    ':not(.title-slide)' +
+    // add additional classes to exclude here, e.g.
+    // ':not(.inverse)' +
+    ':not(.hide-logo)'
+  )
+  .forEach(el => {
+    el.innerHTML += '<div class="logo"></div>';
+  });
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
