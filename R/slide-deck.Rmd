@@ -80,7 +80,7 @@ load(here("Data", "results.RData"))
 
 ```{r}
 introduce(pt_char) %>% 
-  select(rows, columns, complete_rows, total_missing_values, memory_usage) %>% 
+  select(rows, columns, complete_rows, total_missing_values) %>% 
   kbl() %>% 
   column_spec(4, background = "yellow", 
               popover = "Large number of missing values")
@@ -92,7 +92,7 @@ introduce(pt_char) %>%
 ```{r}
 
 introduce(event_time) %>% 
-  select(rows, columns, complete_rows, total_missing_values, memory_usage) %>% 
+  select(rows, columns, complete_rows, total_missing_values) %>% 
   kable()
 
 
@@ -222,14 +222,14 @@ lplot1 <-
             shapes = c("triangle", "circle", "diamond"),
             colors = c("red", "blue", "orange"),
             sample.names = c("Unweighted", "Full-match","Subclass"),
-            position = c(0.9, 0.8), 
+            position = c(0.8, 0.7), 
             title = element_blank()) +
   xlab("Absolute SMD") +
   theme(
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12), 
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 10), 
     axis.text.x = element_text(size = 16),
-    axis.title.x = element_text(size = 16),
+    axis.title.x = element_text(size = 16)
     )
 
 lplot2 <- 
@@ -243,14 +243,14 @@ lplot2 <-
             shapes = c("triangle", "circle", "diamond"),
             colors = c("red", "blue", "orange"),
             sample.names = c("Unweighted", "Full-match","Subclass"),
-            position = c(0.9, 0.8), 
+            position = c(0.8, 0.7), 
             title = element_blank()) +
   xlab("Absolute SMD") +
   theme(
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12), 
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 10), 
     axis.text.x = element_text(size = 16),
-    axis.title.x = element_text(size = 16),
+    axis.title.x = element_text(size = 16)
   )
 
 
@@ -300,20 +300,24 @@ surv_annotate(plot_sub500, cox_sub500, size = 7)
 
 ---
 
-# Results - Sensitivity Analysis (Multivariable Regression) 
+# Results - Sensitivity Analysis
 
-.font120[**Summary of sensitivity analysis:**]
-
-```{r fig.width=14, fig.height=6}
+```{r fig.width=14, fig.height=7}
 forest_plot +
+  scale_x_continuous(limits = c(0.8, 1.2), expand = c(0, 0)) +
+  annotate("text", x = 0.98, y = 0, label = "Favors Drug A", size = 8, hjust = 1) +
+  annotate("text", x = 1.02, y = 0, label = "Favors Drug B", size = 8, hjust = 0) +
   theme(axis.text = element_text(size = 20), 
-        axis.title = element_text(size = 24))
+        axis.title = element_text(size = 24), 
+        axis.line.x = element_line(size = 1), 
+        axis.ticks.length.x = unit(0.25, "cm")) 
+
 ```
 
 
 ---
 
-# Results - Subgrvival Analysis (Full Matching)
+# Results - Subgroup Analysis (Full Matching)
 
 ```{r fig.width=14, fig.height=6}
 plot_subgroup +
